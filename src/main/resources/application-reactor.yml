@@ -1,0 +1,19 @@
+reactor:
+  kafka:
+    configurations:
+      bootstrap.servers: localhost:9072
+      retries: 10
+      max.poll.interval.ms: 2147483647 # Integer.MAX_VALUE
+      #request.timeout.ms: 360000 #Join Group MaxTime
+      session.timeout.ms: 40000 # The timeout used to detect worker failures. The worker sends periodic heartbeats to indicate its liveness to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, then the broker will remove the worker from the group and initiate a rebalance. Broker Configs??
+      max.poll.records: 10 #
+      key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value.deserializer: org.apache.kafka.common.serialization.StringDeserializer #org.springframework.kafka.support.serializer.JsonDeserializer
+      auto.offset.reset: latest
+      heartbeat.interval.ms: 30000
+      fetch.max.bytes: 1048576
+      max.partition.fetch.bytes: 10240 # Default 1 MB
+      spring.json.trusted.packages: "*"
+      spring.json.use.type.headers: true
+      retry.backoff.ms: 10000 # The amount of time to wait before attempting to retry a failed request to a given topic partition
+
