@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @SpringBootApplication
 @Slf4j
@@ -34,12 +35,16 @@ public class KafkaTopicGcApplication {
         SpringApplication.run(KafkaTopicGcApplication.class, args);
     }
 
+    private static List<String> clusterBootstraps = List.of("staging-confluent-broker-01-earth.trendyol.com:9092,staging-confluent-broker-02-earth.trendyol.com:9092,staging-confluent-broker-03-earth.trendyol.com:9092,staging-confluent-broker-04-earth.trendyol.com:9092,staging-confluent-broker-05-earth.trendyol.com:9092,staging-confluent-broker-06-earth.trendyol.com:9092,staging-confluent-broker-07-earth.trendyol.com:9092,staging-confluent-broker-08-earth.trendyol.com:9092");
     @Bean
     public CommandLineRunner runner(TaskScheduler virtualTaskScheduler, @Qualifier("applicationTaskExecutor") AsyncTaskExecutor applicationTaskExecutor,
                                     AdminService adminService) {
         return args -> {
-            //                            log.info("Job {} is running at {}, virtual: {}", i, new Date(), Thread.currentThread().isVirtual());
-            virtualTaskScheduler.schedule(() -> adminService.collectDataFromKafka(applicationTaskExecutor), new CronTrigger("0/20 * * * * *"));
+            clusterBootstraps
+                    .forEach(cluster -> {
+                        adminService.collectDataFromKafka(applicationTaskExecutor, cluster);
+                        virtualTaskScheduler.schedule(() -> adminService.collectDataFromKafka(applicationTaskExecutor, cluster), new CronTrigger("* * 2 * * *"));
+                    });
         };
     }
 

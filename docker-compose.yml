@@ -13,6 +13,27 @@ volumes:
   kafka-data-1:
     driver: local
 services:
+  redis:
+    image: 'bitnami/redis:latest'
+    environment:
+      - REDIS_PASSWORD=123456
+      - ALLOW_EMPTY_PASSWORD=no
+    ports:
+      - "6379:6379"
+  redis-commander:
+    container_name: redis-commander
+    image: rediscommander/redis-commander:latest
+    restart: always
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=123456
+    depends_on:
+      - redis
+    links:
+      - redis
+    ports:
+      - "8081:8081"
+
   akhq:
     image: tchiotludo/akhq
     environment:

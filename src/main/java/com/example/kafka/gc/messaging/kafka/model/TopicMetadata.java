@@ -5,22 +5,24 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.apache.kafka.common.Node;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.redis.core.RedisHash;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Objects;
+import java.io.Serial;
+import java.io.Serializable;
+import java.util.*;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TopicMetadata {
+@RedisHash
+public class TopicMetadata implements Serializable {
+    @Id private String metadataId;
     Broker broker;
     String name;
     Boolean internal;
     int partitionCount;
     long numberOfMessages;
-    @Builder.Default
-    List<OffsetMetadata> offsetMetadataList = new ArrayList<>();
+    Date lastMessageTime;
 }
