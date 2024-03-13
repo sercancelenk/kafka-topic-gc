@@ -40,7 +40,6 @@ public class MonitoringProducer {
     }
 
     public void sendMessage(String socketMessageDto) {
-        log.info("Sending to Kafka");
 
         String correlationId = "Transaction_" + UUID.randomUUID();
         String key = "Key" + UUID.randomUUID();
@@ -55,7 +54,7 @@ public class MonitoringProducer {
                     //.doOnNext(result -> handleOnNext(result, eventRecord, errorHandlerCallback))
                     .doOnError(e -> log.error("->", e))
                     .parallel(3)
-                    .subscribe(r -> log.info("-> {}", r));
+                    .subscribe();
         } catch (Exception ex) {
             log.error("Error Sending/Constructing Producer/Data: {}, {}", ex.getMessage(), ex);
         }

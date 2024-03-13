@@ -43,7 +43,6 @@ public class MonitoringConsumerConfig {
                 .commitBatchSize(10);
 
         disposable = consumeMessages(TOPIC);
-        log.info("Heartbeat consumer loaded");
     }
 
     public Disposable consumeMessages(String topic) {
@@ -60,14 +59,12 @@ public class MonitoringConsumerConfig {
                 .publish()
                 .autoConnect();
 
-        return topicMetadataStream.subscribe(record -> log.info("Consumer Subscribed Successfully"));
+        return topicMetadataStream.subscribe();
     }
 
     @PreDestroy
     public void preDestroy() {
-        log.info("Destroying the Consumer");
         disposable.dispose();
-        log.info("Consumer Subscribe Flux disposed");
     }
 
 

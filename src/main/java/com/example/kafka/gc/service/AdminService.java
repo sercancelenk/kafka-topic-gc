@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
@@ -121,7 +122,6 @@ public class AdminService {
             List<TopicPartition> partitions = consumer.partitionsFor(topic).stream().map(p -> new TopicPartition(topic, p.partition()))
                     .toList();
             consumer.assign(partitions);
-            consumer.assign(partitions);
             consumer.seekToEnd(Collections.emptySet());
             Map<TopicPartition, Long> endPartitions = partitions.stream().collect(Collectors.toMap(Function.identity(), consumer::position));
             topicMetadataBuilder.partitionCount(partitions.size());
@@ -147,11 +147,15 @@ public class AdminService {
 
     public void getLastMessage(String cluster, String topic, TopicMetadata.TopicMetadataBuilder topicMetadataBuilder) {
         try (KafkaConsumer<String, String> consumer = createConsumer(cluster, UUID.randomUUID().toString())) {
-            consumer.subscribe(Collections.singletonList(topic));
+            List<TopicPartition> partitions = consumer.partitionsFor(topic).stream().map(p -> new TopicPartition(topic, p.partition()))
+                    .toList();
+            consumer.assign(partitions);
+            consumer.seekToEnd(Collections.emptySet());
 
-            consumer.poll(Duration.ofSeconds(10));
+//            consumer.subscribe(Collections.singletonList(topic));
 
-            consumer.assignment().forEach(System.out::println);
+//            consumer.poll(Duration.ofSeconds(3));
+
 
             AtomicLong maxTimestamp = new AtomicLong();
             AtomicReference<ConsumerRecord<String, String>> latestRecord = new AtomicReference<>();
@@ -162,9 +166,7 @@ public class AdminService {
                 consumer.seek(topicPartition, (offset == 0) ? offset : offset - 1);
 
                 // poll to get the last record in each partition
-                consumer.poll(Duration.ofSeconds(10)).forEach(record -> {
-
-                    // the latest record in the 'topic' is the one with the highest timestamp
+                consumer.poll(Duration.ofSeconds(3)).forEach(record -> {
                     if (record.timestamp() > maxTimestamp.get()) {
                         maxTimestamp.set(record.timestamp());
                         latestRecord.set(record);
