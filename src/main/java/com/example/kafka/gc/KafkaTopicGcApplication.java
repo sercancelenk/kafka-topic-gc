@@ -35,7 +35,7 @@ public class KafkaTopicGcApplication {
         SpringApplication.run(KafkaTopicGcApplication.class, args);
     }
 
-    private static List<String> clusterBootstraps = List.of("staging-confluent-broker-01-earth.trendyol.com:9092,staging-confluent-broker-02-earth.trendyol.com:9092,staging-confluent-broker-03-earth.trendyol.com:9092,staging-confluent-broker-04-earth.trendyol.com:9092,staging-confluent-broker-05-earth.trendyol.com:9092,staging-confluent-broker-06-earth.trendyol.com:9092,staging-confluent-broker-07-earth.trendyol.com:9092,staging-confluent-broker-08-earth.trendyol.com:9092");
+    private static List<String> clusterBootstraps = List.of("localhost:9092");
     @Bean
     public CommandLineRunner runner(TaskScheduler virtualTaskScheduler, @Qualifier("applicationTaskExecutor") AsyncTaskExecutor applicationTaskExecutor,
                                     AdminService adminService) {
