@@ -152,11 +152,6 @@ public class AdminService {
             consumer.assign(partitions);
             consumer.seekToEnd(Collections.emptySet());
 
-//            consumer.subscribe(Collections.singletonList(topic));
-
-//            consumer.poll(Duration.ofSeconds(3));
-
-
             AtomicLong maxTimestamp = new AtomicLong();
             AtomicReference<ConsumerRecord<String, String>> latestRecord = new AtomicReference<>();
 
