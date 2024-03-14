@@ -3,7 +3,7 @@ spring:
     url: jdbc:postgresql://localhost:5432/db?reWriteBatchedInserts=true
     driver-class-name: org.postgresql.Driver
     datasource-class-name: org.postgresql.ds.PGSimpleDataSource
-    username: user
+    username: usr
     password: pass
     hikari:
       pool-name: db-default-db-pool

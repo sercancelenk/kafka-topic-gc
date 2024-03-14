@@ -16,7 +16,7 @@ import reactor.core.publisher.Flux;
 public class LiveController {
     private final MonitoringConsumerConfig consumer;
 
-    @GetMapping(value = "tickers", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @GetMapping(value = "monitor", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> getTickersStream() {
         return consumer.getTopicMetadataStream();
     }

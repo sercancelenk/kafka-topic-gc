@@ -11,7 +11,7 @@ import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
+import java.util.Arrays;
 
 @Component
 @RequiredArgsConstructor
@@ -23,7 +23,9 @@ public class Initializer {
     @Value("${application.scheduler.cron}")
     private String applicationSchedulerCron;
 
-    private static List<String> clusterBootstraps = List.of("localhost:9092");
+
+    @Value("#{'${clusters}'.split(',')}")
+    private String[] clusterBootstraps;
 
     @Autowired
     public Initializer(TaskScheduler virtualTaskScheduler, @Qualifier("applicationTaskExecutor") AsyncTaskExecutor applicationTaskExecutor,
@@ -35,10 +37,10 @@ public class Initializer {
 
     @PostConstruct
     public void initGC() {
-        clusterBootstraps
+        Arrays.stream(clusterBootstraps)
                 .forEach(cluster -> {
                     adminService.collectDataFromKafka(applicationTaskExecutor, cluster);
-                    virtualTaskScheduler.schedule(() -> adminService.collectDataFromKafka(applicationTaskExecutor, cluster), new CronTrigger(applicationSchedulerCron));
+//                    virtualTaskScheduler.schedule(() -> adminService.collectDataFromKafka(applicationTaskExecutor, cluster), new CronTrigger(applicationSchedulerCron));
                 });
     }
 }

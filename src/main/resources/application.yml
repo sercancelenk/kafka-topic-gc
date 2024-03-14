@@ -12,3 +12,5 @@ logging:
 
 application:
   scheduler.cron: "* * 2 * * *"
+
+clusters: localhost:9092

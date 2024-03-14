@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -23,6 +24,7 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -46,19 +48,21 @@ public class AdminService {
         List<String> ignoredTopicsKeys = List.of("_schemas", "connect", "-");
         BrokerDescribedTopicPair brokerAndDescribedTopics = getBrokerAndDescribedTopics(adminClientProps, ignoredTopicsKeys);
         if (Objects.nonNull(brokerAndDescribedTopics.describeTopicsResult)) {
+            ThreadLocal<TopicMetadata.TopicMetadataBuilder> topicMetadataBuilderTL = new InheritableThreadLocal<>();
+            AtomicInteger topicIndex = new AtomicInteger(0);
+            log.info("TOPIC COUNT: {}", brokerAndDescribedTopics.describeTopicsResult.topicNameValues().size());
             brokerAndDescribedTopics.describeTopicsResult.topicNameValues()
                     .forEach((topic, value) -> {
-                        applicationTaskExecutor.submit(collectData(cluster, topic, value, brokerAndDescribedTopics));
+                        applicationTaskExecutor.submit(collectData(cluster, topic, value, brokerAndDescribedTopics, topicMetadataBuilderTL, topicIndex.incrementAndGet()));
                     });
         }
 
     }
 
-    private Runnable collectData(String cluster, String topic, KafkaFuture<TopicDescription> value, BrokerDescribedTopicPair brokerAndDescribedTopics) {
+    private Runnable collectData(String cluster, String topic, KafkaFuture<TopicDescription> value, BrokerDescribedTopicPair brokerAndDescribedTopics, ThreadLocal<TopicMetadata.TopicMetadataBuilder> topicMetadataBuilderTL, int topicIndex) {
         return () -> {
             try {
                 TopicDescription topicDescription = value.get(20, TimeUnit.SECONDS);
-                ThreadLocal<TopicMetadata.TopicMetadataBuilder> topicMetadataBuilderTL = new InheritableThreadLocal<>();
                 topicMetadataBuilderTL.set(TopicMetadata.builder());
                 topicMetadataBuilderTL.get().name(topic);
                 topicMetadataBuilderTL.get().broker(brokerAndDescribedTopics.broker);
@@ -75,9 +79,11 @@ public class AdminService {
 
                 topicMetadataService.set(topic, "Cluster-".concat(topicMeta.getBroker().getClusterId()), topicMeta);
                 producer.sendMessage(objectMapper.writeValueAsString(topicMeta));
+                log.info("{} Topic {} process done.", topicIndex, topic);
             } catch (InterruptedException | ExecutionException | TimeoutException |
                      JsonProcessingException e) {
                 log.error("Error occurred while requesting topic describe");
+                log.error("{} Topic {} process has en error.", topicIndex, topic, e);
             }
         };
     }
@@ -87,7 +93,7 @@ public class AdminService {
 
     ;
 
-    private BrokerDescribedTopicPair getBrokerAndDescribedTopics(Properties adminClientProps, List<String> ignoredTopicsKeys) throws InterruptedException, ExecutionException {
+    private BrokerDescribedTopicPair getBrokerAndDescribedTopics(Properties adminClientProps, List<String> ignoredTopicsKeys) {
         Broker.BrokerBuilder brokerBuilder = Broker.builder();
         DescribeTopicsResult describeTopics = null;
 
@@ -104,7 +110,10 @@ public class AdminService {
                 options.listInternal(false);
                 ListTopicsResult listTopicsResult = client.listTopics(options);
 
-                List<String> topicList = listTopicsResult.names().get().stream().filter(t -> ignoredTopicsKeys.stream().allMatch(i -> !t.contains(i))).toList();
+                List<String> topicList = listTopicsResult.names().get().stream()
+                        .filter(t -> ignoredTopicsKeys.stream().allMatch(i -> !t.contains(i)))
+                        .filter(t -> StringUtils.countMatches(t, ".") > 1)
+                        .toList();
 
                 // check if our demo topic exists, create it if it doesn't
                 describeTopics = client.describeTopics(topicList);

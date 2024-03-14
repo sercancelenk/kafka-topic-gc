@@ -24,7 +24,7 @@ public class ThreadExecutorConfig {
     public AsyncTaskExecutor applicationTaskExecutor() {
         final ThreadFactory factory = Thread.ofVirtual().name("byzas-async-", 0)
                 .uncaughtExceptionHandler((t, e) -> System.out.println("Exception in viertual thread " + e.getMessage())).factory();
-        return new TaskExecutorAdapter(Executors.newFixedThreadPool(5, factory));
+        return new TaskExecutorAdapter(Executors.newThreadPerTaskExecutor(factory));
     }
 
     @Bean
@@ -38,8 +38,8 @@ public class ThreadExecutorConfig {
         final ThreadFactory factory = Thread.ofVirtual().name("byzas-routine-", 0)
                 .uncaughtExceptionHandler((t, e) -> System.out.println("Exception in viertual thread " + e.getMessage())).factory();
 
-//        build.setTargetTaskExecutor(Executors.newThreadPerTaskExecutor(factory));
-        build.setTargetTaskExecutor(Executors.newFixedThreadPool(5, factory));
+        build.setTargetTaskExecutor(Executors.newThreadPerTaskExecutor(factory));
+//        build.setTargetTaskExecutor(Executors.newFixedThreadPool(5, factory));
         return build;
     }
 
