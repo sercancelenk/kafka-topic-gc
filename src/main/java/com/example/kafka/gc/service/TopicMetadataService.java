@@ -35,4 +35,8 @@ public class TopicMetadataService implements JsonExtension {
     public void set(String key, Object value) {
         redisTemplate.opsForValue().set(key, value);
     }
+
+    public void set(String hashKey, String key, Object value) {
+        redisTemplate.opsForHash().put(key, hashKey, value);
+    }
 }

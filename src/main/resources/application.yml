@@ -1,0 +1,14 @@
+
+server:
+  port: 9098
+spring:
+  threads.virtual.enabled: true
+  profiles.include: reactor, redis
+
+logging:
+  level:
+    root: ERROR
+    com.example: INFO
+
+application:
+  scheduler.cron: "* * 2 * * *"

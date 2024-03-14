@@ -34,21 +34,4 @@ public class KafkaTopicGcApplication {
     public static void main(String[] args) {
         SpringApplication.run(KafkaTopicGcApplication.class, args);
     }
-
-    private static List<String> clusterBootstraps = List.of("localhost:9092");
-    @Bean
-    public CommandLineRunner runner(TaskScheduler virtualTaskScheduler, @Qualifier("applicationTaskExecutor") AsyncTaskExecutor applicationTaskExecutor,
-                                    AdminService adminService) {
-        return args -> {
-            clusterBootstraps
-                    .forEach(cluster -> {
-                        adminService.collectDataFromKafka(applicationTaskExecutor, cluster);
-                        virtualTaskScheduler.schedule(() -> adminService.collectDataFromKafka(applicationTaskExecutor, cluster), new CronTrigger("* * 2 * * *"));
-                    });
-        };
-    }
-
-
-
-
 }

@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
@@ -24,7 +23,6 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -54,6 +52,7 @@ public class AdminService {
         }
 
     }
+
     private Runnable collectData(String cluster, String topic, KafkaFuture<TopicDescription> value, BrokerDescribedTopicPair brokerAndDescribedTopics) {
         return () -> {
             try {
@@ -67,13 +66,13 @@ public class AdminService {
                 topicMetadataBuilderTL.get().broker(brokerAndDescribedTopics.broker);
 
                 collectNumberOfMessagesCount(cluster, topic, topicMetadataBuilderTL.get());
-                if(topicMetadataBuilderTL.get().build().getNumberOfMessages() > 0)
+                if (topicMetadataBuilderTL.get().build().getNumberOfMessages() > 0)
                     getLastMessage(cluster, topic, topicMetadataBuilderTL.get());
 
                 topicMetadataBuilderTL.get().metadataId(brokerAndDescribedTopics.broker.getClusterId().concat("|").concat(topic));
                 TopicMetadata topicMeta = topicMetadataBuilderTL.get().build();
 
-                topicMetadataService.set(topicMeta.getMetadataId(), topicMeta);
+                topicMetadataService.set(topic, "Cluster-".concat(topicMeta.getBroker().getClusterId()), topicMeta);
                 producer.sendMessage(objectMapper.writeValueAsString(topicMeta));
             } catch (InterruptedException | ExecutionException | TimeoutException |
                      JsonProcessingException e) {
@@ -91,7 +90,7 @@ public class AdminService {
         Broker.BrokerBuilder brokerBuilder = Broker.builder();
         DescribeTopicsResult describeTopics = null;
 
-        try{
+        try {
             try (AdminClient client = AdminClient.create(adminClientProps)) {
                 // Who are the brokers? Who is the controller?
                 DescribeClusterResult cluster = client.describeCluster();
@@ -110,7 +109,7 @@ public class AdminService {
                 describeTopics = client.describeTopics(topicList);
                 return new BrokerDescribedTopicPair(brokerBuilder.build(), describeTopics);
             }
-        }catch (Throwable ex){
+        } catch (Throwable ex) {
             System.out.println("Exception Occurred while describing topics. " + ex.getMessage());
             throw new RuntimeException("Exception Occurred while describing topics. " + ex.getMessage());
         }
@@ -168,8 +167,11 @@ public class AdminService {
                     }
                 });
             });
-            if(Objects.nonNull(latestRecord.get()))
+            if (Objects.nonNull(latestRecord.get())) {
                 topicMetadataBuilder.lastMessageTime(new Date(latestRecord.get().timestamp()));
+                topicMetadataBuilder.lastOffset(latestRecord.get().offset());
+                topicMetadataBuilder.lastOffsetPartition(latestRecord.get().partition());
+            }
         } catch (Throwable ex) {
             System.out.println("Exception occurred while getting last message " + ex.getMessage());
         }

@@ -25,4 +25,6 @@ public class TopicMetadata implements Serializable {
     int partitionCount;
     long numberOfMessages;
     Date lastMessageTime;
+    long lastOffset;
+    long lastOffsetPartition;
 }
