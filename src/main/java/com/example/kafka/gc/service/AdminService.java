@@ -35,6 +35,7 @@ public class AdminService {
     private final ObjectMapper objectMapper;
     private final MonitoringProducer producer;
     private final TopicMetadataService topicMetadataService;
+    private final TopicMetadataDbService topicMetadataDbService;
 
     @SneakyThrows
     public void collectDataFromKafka(AsyncTaskExecutor applicationTaskExecutor, String cluster) {
@@ -42,7 +43,7 @@ public class AdminService {
         adminClientProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, cluster);
         adminClientProps.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 20000);
         adminClientProps.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 20000);
-        List<String> ignoredTopicsKeys = List.of("_schemas", "connect");
+        List<String> ignoredTopicsKeys = List.of("_schemas", "connect", "-");
         BrokerDescribedTopicPair brokerAndDescribedTopics = getBrokerAndDescribedTopics(adminClientProps, ignoredTopicsKeys);
         if (Objects.nonNull(brokerAndDescribedTopics.describeTopicsResult)) {
             brokerAndDescribedTopics.describeTopicsResult.topicNameValues()

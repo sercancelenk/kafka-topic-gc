@@ -3,7 +3,7 @@ server:
   port: 9098
 spring:
   threads.virtual.enabled: true
-  profiles.include: reactor, redis
+  profiles.include: reactor, redis, postgresql
 
 logging:
   level:

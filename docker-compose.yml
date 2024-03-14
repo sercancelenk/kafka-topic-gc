@@ -13,6 +13,19 @@ volumes:
   kafka-data-1:
     driver: local
 services:
+  customer-invoice-postgre:
+    image: "kartoza/postgis:9.6-2.4"
+    restart: unless-stopped
+    hostname: db-postgre
+    domainname: db-postgre
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASS: pass
+      POSTGRES_DBNAME: db
+      ALLOW_IP_RANGE: 0.0.0.0/0
+    ports:
+      - "5432:5432"
+
   redis:
     image: 'bitnami/redis:latest'
     environment:
