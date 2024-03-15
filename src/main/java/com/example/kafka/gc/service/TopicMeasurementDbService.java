@@ -8,7 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class TopicMetadataDbService {
+public class TopicMeasurementDbService {
     private final TopicMetadataRepository topicMetadataRepository;
 
     @Transactional

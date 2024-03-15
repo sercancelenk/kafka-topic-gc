@@ -1,6 +1,6 @@
 package com.example.kafka.gc;
 
-import com.example.kafka.gc.service.AdminService;
+import com.example.kafka.gc.service.TopicGcService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +18,7 @@ import java.util.Arrays;
 public class Initializer {
     private TaskScheduler virtualTaskScheduler;
     private AsyncTaskExecutor applicationTaskExecutor;
-    private AdminService adminService;
+    private TopicGcService topicGcService;
 
     @Value("${application.scheduler.cron}")
     private String applicationSchedulerCron;
@@ -29,18 +29,18 @@ public class Initializer {
 
     @Autowired
     public Initializer(TaskScheduler virtualTaskScheduler, @Qualifier("applicationTaskExecutor") AsyncTaskExecutor applicationTaskExecutor,
-                       AdminService adminService) {
+                       TopicGcService topicGcService) {
         this.virtualTaskScheduler = virtualTaskScheduler;
         this.applicationTaskExecutor = applicationTaskExecutor;
-        this.adminService = adminService;
+        this.topicGcService = topicGcService;
     }
 
     @PostConstruct
     public void initGC() {
         Arrays.stream(clusterBootstraps)
                 .forEach(cluster -> {
-                    adminService.describeTopics(applicationTaskExecutor, cluster);
-//                    virtualTaskScheduler.schedule(() -> adminService.collectDataFromKafka(applicationTaskExecutor, cluster), new CronTrigger(applicationSchedulerCron));
+                    topicGcService.describeTopics(applicationTaskExecutor, cluster);
+                    virtualTaskScheduler.schedule(() -> topicGcService.describeTopics(applicationTaskExecutor, cluster), new CronTrigger(applicationSchedulerCron));
                 });
     }
 }

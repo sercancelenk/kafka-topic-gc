@@ -12,7 +12,10 @@ import java.util.Date;
 @AllArgsConstructor
 @Builder
 public class LastMessageMetadata {
-    private Date timeOfLastMessage;
-    private long offsetOfLastMessage;
-    private long partitionOfLastMessage;
+    @Builder.Default
+    private Date timeOfLastMessage = null;
+    @Builder.Default
+    private long offsetOfLastMessage = -1;
+    @Builder.Default
+    private long partitionOfLastMessage = -1;
 }

@@ -22,17 +22,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class AdminService {
+public class TopicGcService {
     private final ObjectMapper objectMapper;
     private final MonitoringProducer producer;
-    private final TopicMetadataService topicMetadataService;
-    private final TopicMetadataDbService topicMetadataDbService;
-    private final KafkaExtension kafkaExtension;
+    private final TopicMeasurementRedisService topicMeasurementRedisService;
+    private final TopicMeasurementDbService topicMeasurementDbService;
+    private final AdminClientService adminClientService;
 
     @SneakyThrows
     public void describeTopics(AsyncTaskExecutor applicationTaskExecutor, String cluster) {
         List<String> ignoredTopicsKeys = List.of("_schemas", "connect", "-");
-        kafkaExtension.getBrokerAndDescribedTopics(cluster, ignoredTopicsKeys)
+        adminClientService.getBrokerAndDescribedTopics(cluster, ignoredTopicsKeys)
                 .ifPresentOrElse(brokerAndDescribedTopics -> {
                     ThreadLocal<TopicMeasurement.TopicMeasurementBuilder> topicMetadataBuilderTL = new InheritableThreadLocal<>();
                     DescribeTopicsResult describeTopicsResult = brokerAndDescribedTopics.describeTopicsResult();
@@ -51,8 +51,8 @@ public class AdminService {
                         .thenApply(td -> {
                             measurementBuilderTL.set(TopicMeasurement.builder());
 
-                            PartitionMetadata partitionMetadata = kafkaExtension.measurePartitionMetadata(cluster, topic);
-                            LastMessageMetadata lastMessageMetadata = kafkaExtension.measureLastMessageMetadata(cluster, topic, partitionMetadata);
+                            PartitionMetadata partitionMetadata = adminClientService.measurePartitionMetadata(cluster, topic);
+                            LastMessageMetadata lastMessageMetadata = adminClientService.measureLastMessageMetadata(cluster, topic, partitionMetadata);
 
                             measurementBuilderTL.get().broker(brokerAndDescribedTopics.broker());
                             measurementBuilderTL.get().topicMetadata(TopicMetadata.builder()
@@ -65,7 +65,7 @@ public class AdminService {
                             measurementBuilderTL.get().metadataId(clusterId.concat("|").concat(topic));
                             TopicMeasurement measurement = measurementBuilderTL.get().build();
 
-                            topicMetadataService.set(topic, "Cluster-".concat(clusterId), measurement);
+                            topicMeasurementRedisService.set(topic, "Cluster-".concat(clusterId), measurement);
                             try {
                                 producer.sendMessage(objectMapper.writeValueAsString(measurement));
                             } catch (JsonProcessingException e) {

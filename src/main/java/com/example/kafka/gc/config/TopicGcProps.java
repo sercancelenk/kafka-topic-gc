@@ -1,4 +1,4 @@
-package com.example.kafka.gc.model;
+package com.example.kafka.gc.config;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

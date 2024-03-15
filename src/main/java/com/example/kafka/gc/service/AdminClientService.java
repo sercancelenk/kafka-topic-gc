@@ -1,10 +1,11 @@
 package com.example.kafka.gc.service;
 
+import com.example.kafka.gc.extension.KafkaExtension;
 import com.example.kafka.gc.messaging.kafka.model.Broker;
 import com.example.kafka.gc.messaging.kafka.model.BrokerDescribedTopicPair;
 import com.example.kafka.gc.messaging.kafka.model.LastMessageMetadata;
 import com.example.kafka.gc.messaging.kafka.model.PartitionMetadata;
-import com.example.kafka.gc.model.TopicGcProps;
+import com.example.kafka.gc.config.TopicGcProps;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -26,16 +27,8 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class KafkaExtension {
+public class AdminClientService implements KafkaExtension {
     private final TopicGcProps topicGcProps;
-
-    private AdminClient createAdminClient(String cluster) {
-        Properties props = new Properties();
-        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, cluster);
-        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, topicGcProps.getAdminClient().requestTimeout());
-        props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, topicGcProps.getAdminClient().defaultApiTimeout());
-        return AdminClient.create(props);
-    }
 
     protected Optional<BrokerDescribedTopicPair> getBrokerAndDescribedTopics(String bootstrapServers, List<String> ignoredTopicsKeys) {
         Broker.BrokerBuilder brokerBuilder = Broker.builder();
@@ -70,25 +63,9 @@ public class KafkaExtension {
 
     }
 
-    protected KafkaConsumer<String, String> createConsumer(String bootstrapServers) {
-        return createConsumer(bootstrapServers, "tgc");
-    }
-
-    protected KafkaConsumer<String, String> createConsumer(String bootstrapServers, String groupId) {
-        Properties consumerProps = new Properties();
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        consumerProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, topicGcProps.getDefaultConsumerProps().maxPartitionFetchBytes());
-        consumerProps.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, topicGcProps.getDefaultConsumerProps().fetchMaxBytes());
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        return new KafkaConsumer<String, String>(consumerProps);
-    }
-
     protected PartitionMetadata measurePartitionMetadata(String cluster, String topic) {
         try (KafkaConsumer<String, String> consumer = createConsumer(cluster)) {
-            List<TopicPartition> partitions = consumer.partitionsFor(topic).stream().map(p -> new TopicPartition(topic, p.partition()))
-                    .toList();
+            List<TopicPartition> partitions = getTopicPartitions(topic, consumer);
             consumer.assign(partitions);
             consumer.seekToEnd(Collections.emptySet());
             Map<TopicPartition, Long> endPartitions = partitions.stream().collect(Collectors.toMap(Function.identity(), consumer::position));
@@ -101,8 +78,7 @@ public class KafkaExtension {
             return LastMessageMetadata.builder().build();
         }
         try (KafkaConsumer<String, String> consumer = createConsumer(cluster, UUID.randomUUID().toString())) {
-            List<TopicPartition> partitions = consumer.partitionsFor(topic).stream().map(p -> new TopicPartition(topic, p.partition()))
-                    .toList();
+            List<TopicPartition> partitions = getTopicPartitions(topic, consumer);
             consumer.assign(partitions);
             consumer.seekToEnd(Collections.emptySet());
 
@@ -136,4 +112,8 @@ public class KafkaExtension {
         return null;
     }
 
+    @Override
+    public TopicGcProps getTopicGcProps() {
+        return topicGcProps;
+    }
 }
