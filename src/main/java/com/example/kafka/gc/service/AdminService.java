@@ -61,10 +61,10 @@ public class AdminService {
                                     .partitionMetadata(partitionMetadata)
                                     .lastMessageMetadata(lastMessageMetadata)
                                     .build());
-                            TopicMeasurement measurement = measurementBuilderTL.get().build();
-
                             String clusterId = brokerAndDescribedTopics.broker().getClusterId();
                             measurementBuilderTL.get().metadataId(clusterId.concat("|").concat(topic));
+                            TopicMeasurement measurement = measurementBuilderTL.get().build();
+
                             topicMetadataService.set(topic, "Cluster-".concat(clusterId), measurement);
                             try {
                                 producer.sendMessage(objectMapper.writeValueAsString(measurement));

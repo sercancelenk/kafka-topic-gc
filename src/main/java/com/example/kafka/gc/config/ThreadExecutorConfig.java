@@ -12,6 +12,7 @@ import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.SimpleAsyncTaskScheduler;
 
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ThreadFactory;
@@ -24,7 +25,9 @@ public class ThreadExecutorConfig {
     public AsyncTaskExecutor applicationTaskExecutor() {
         final ThreadFactory factory = Thread.ofVirtual().name("byzas-async-", 0)
                 .uncaughtExceptionHandler((t, e) -> System.out.println("Exception in viertual thread " + e.getMessage())).factory();
-        return new TaskExecutorAdapter(Executors.newThreadPerTaskExecutor(factory));
+        ExecutorService newFixedThreadPool = Executors.newFixedThreadPool(100, factory);
+//        ExecutorService newThreadPerTaskPool = Executors.newThreadPerTaskExecutor(factory);
+        return new TaskExecutorAdapter(newFixedThreadPool);
     }
 
     @Bean

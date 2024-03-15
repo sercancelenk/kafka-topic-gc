@@ -13,7 +13,7 @@ logging:
 application:
   scheduler.cron: "* * 2 * * *"
 
-clusters: localhost:9092
+clusters: localhost:9092,staging-confluent-broker-01-earth.trendyol.com:9092
 
 topic-gc:
   default-consumer-props:
