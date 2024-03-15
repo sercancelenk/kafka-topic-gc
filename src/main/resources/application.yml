@@ -14,3 +14,11 @@ application:
   scheduler.cron: "* * 2 * * *"
 
 clusters: localhost:9092
+
+topic-gc:
+  default-consumer-props:
+    fetch-max-bytes: "20971520"
+    max-partition-fetch-bytes: "20971520"
+  admin-client:
+    default-api-timeout: 20000
+    request-timeout: 20000

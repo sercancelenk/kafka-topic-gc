@@ -1,34 +1,23 @@
 package com.example.kafka.gc.service;
 
-import com.example.kafka.gc.messaging.kafka.model.Broker;
-import com.example.kafka.gc.messaging.kafka.model.TopicMetadata;
+import com.example.kafka.gc.messaging.kafka.model.*;
 import com.example.kafka.gc.messaging.kafka.monitor.MonitoringProducer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.kafka.clients.admin.*;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
-import java.util.*;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -38,152 +27,60 @@ public class AdminService {
     private final MonitoringProducer producer;
     private final TopicMetadataService topicMetadataService;
     private final TopicMetadataDbService topicMetadataDbService;
+    private final KafkaExtension kafkaExtension;
 
     @SneakyThrows
-    public void collectDataFromKafka(AsyncTaskExecutor applicationTaskExecutor, String cluster) {
-        Properties adminClientProps = new Properties();
-        adminClientProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, cluster);
-        adminClientProps.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 20000);
-        adminClientProps.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 20000);
+    public void describeTopics(AsyncTaskExecutor applicationTaskExecutor, String cluster) {
         List<String> ignoredTopicsKeys = List.of("_schemas", "connect", "-");
-        BrokerDescribedTopicPair brokerAndDescribedTopics = getBrokerAndDescribedTopics(adminClientProps, ignoredTopicsKeys);
-        if (Objects.nonNull(brokerAndDescribedTopics.describeTopicsResult)) {
-            ThreadLocal<TopicMetadata.TopicMetadataBuilder> topicMetadataBuilderTL = new InheritableThreadLocal<>();
-            AtomicInteger topicIndex = new AtomicInteger(0);
-            log.info("TOPIC COUNT: {}", brokerAndDescribedTopics.describeTopicsResult.topicNameValues().size());
-            brokerAndDescribedTopics.describeTopicsResult.topicNameValues()
-                    .forEach((topic, value) -> {
-                        applicationTaskExecutor.submit(collectData(cluster, topic, value, brokerAndDescribedTopics, topicMetadataBuilderTL, topicIndex.incrementAndGet()));
-                    });
-        }
-
+        kafkaExtension.getBrokerAndDescribedTopics(cluster, ignoredTopicsKeys)
+                .ifPresentOrElse(brokerAndDescribedTopics -> {
+                    ThreadLocal<TopicMeasurement.TopicMeasurementBuilder> topicMetadataBuilderTL = new InheritableThreadLocal<>();
+                    DescribeTopicsResult describeTopicsResult = brokerAndDescribedTopics.describeTopicsResult();
+                    AtomicInteger topicIndex = new AtomicInteger(0);
+                    log.info("Cluster: {}, Topic Count: {}", cluster, brokerAndDescribedTopics.describeTopicsResult().topicNameValues().size());
+                    describeTopicsResult
+                            .topicNameValues()
+                            .forEach((topic, value) -> applicationTaskExecutor.submit(measureTopic(cluster, topic, value, brokerAndDescribedTopics, topicMetadataBuilderTL, topicIndex.incrementAndGet())));
+                }, () -> log.info("Can not describe broker and topics. Cluster: {}", cluster));
     }
 
-    private Runnable collectData(String cluster, String topic, KafkaFuture<TopicDescription> value, BrokerDescribedTopicPair brokerAndDescribedTopics, ThreadLocal<TopicMetadata.TopicMetadataBuilder> topicMetadataBuilderTL, int topicIndex) {
+    private Runnable measureTopic(String cluster, String topic, KafkaFuture<TopicDescription> topicDescription, BrokerDescribedTopicPair brokerAndDescribedTopics, ThreadLocal<TopicMeasurement.TopicMeasurementBuilder> measurementBuilderTL, int topicIndex) {
         return () -> {
             try {
-                TopicDescription topicDescription = value.get(20, TimeUnit.SECONDS);
-                topicMetadataBuilderTL.set(TopicMetadata.builder());
-                topicMetadataBuilderTL.get().name(topic);
-                topicMetadataBuilderTL.get().broker(brokerAndDescribedTopics.broker);
-                topicMetadataBuilderTL.get().internal(topicDescription.isInternal());
-                topicMetadataBuilderTL.get().partitionCount(topicDescription.partitions().size());
-                topicMetadataBuilderTL.get().broker(brokerAndDescribedTopics.broker);
+                topicDescription
+                        .thenApply(td -> {
+                            measurementBuilderTL.set(TopicMeasurement.builder());
 
-                collectNumberOfMessagesCount(cluster, topic, topicMetadataBuilderTL.get());
-                if (topicMetadataBuilderTL.get().build().getNumberOfMessages() > 0)
-                    getLastMessage(cluster, topic, topicMetadataBuilderTL.get());
+                            PartitionMetadata partitionMetadata = kafkaExtension.measurePartitionMetadata(cluster, topic);
+                            LastMessageMetadata lastMessageMetadata = kafkaExtension.measureLastMessageMetadata(cluster, topic, partitionMetadata);
 
-                topicMetadataBuilderTL.get().metadataId(brokerAndDescribedTopics.broker.getClusterId().concat("|").concat(topic));
-                TopicMetadata topicMeta = topicMetadataBuilderTL.get().build();
+                            measurementBuilderTL.get().broker(brokerAndDescribedTopics.broker());
+                            measurementBuilderTL.get().topicMetadata(TopicMetadata.builder()
+                                    .name(topic)
+                                    .internal(td.isInternal())
+                                    .partitionMetadata(partitionMetadata)
+                                    .lastMessageMetadata(lastMessageMetadata)
+                                    .build());
+                            TopicMeasurement measurement = measurementBuilderTL.get().build();
 
-                topicMetadataService.set(topic, "Cluster-".concat(topicMeta.getBroker().getClusterId()), topicMeta);
-                producer.sendMessage(objectMapper.writeValueAsString(topicMeta));
-                log.info("{} Topic {} process done.", topicIndex, topic);
-            } catch (InterruptedException | ExecutionException | TimeoutException |
-                     JsonProcessingException e) {
+                            String clusterId = brokerAndDescribedTopics.broker().getClusterId();
+                            measurementBuilderTL.get().metadataId(clusterId.concat("|").concat(topic));
+                            topicMetadataService.set(topic, "Cluster-".concat(clusterId), measurement);
+                            try {
+                                producer.sendMessage(objectMapper.writeValueAsString(measurement));
+                            } catch (JsonProcessingException e) {
+                                throw new RuntimeException(e);
+                            }
+                            log.info("{} Topic {} process done.", topicIndex, topic);
+                            return td;
+                        }).get(20, TimeUnit.SECONDS);
+
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 log.error("Error occurred while requesting topic describe");
                 log.error("{} Topic {} process has en error.", topicIndex, topic, e);
             }
         };
     }
 
-    public record BrokerDescribedTopicPair(Broker broker, DescribeTopicsResult describeTopicsResult) {
-    }
 
-    ;
-
-    private BrokerDescribedTopicPair getBrokerAndDescribedTopics(Properties adminClientProps, List<String> ignoredTopicsKeys) {
-        Broker.BrokerBuilder brokerBuilder = Broker.builder();
-        DescribeTopicsResult describeTopics = null;
-
-        try {
-            try (AdminClient client = AdminClient.create(adminClientProps)) {
-                // Who are the brokers? Who is the controller?
-                DescribeClusterResult cluster = client.describeCluster();
-
-                brokerBuilder.clusterId(cluster.clusterId().get());
-                brokerBuilder.nodes(cluster.nodes().get().stream().map(node -> "node id: ".concat(node.id() + "").concat(" Host: ").concat(node.host() + ":" + node.port())).collect(Collectors.joining(" | ")));
-                brokerBuilder.controller(cluster.controller().get().host().concat(":").concat(cluster.controller().get().port() + ""));
-
-                ListTopicsOptions options = new ListTopicsOptions();
-                options.listInternal(false);
-                ListTopicsResult listTopicsResult = client.listTopics(options);
-
-                List<String> topicList = listTopicsResult.names().get().stream()
-                        .filter(t -> ignoredTopicsKeys.stream().allMatch(i -> !t.contains(i)))
-                        .filter(t -> StringUtils.countMatches(t, ".") > 1)
-                        .toList();
-
-                // check if our demo topic exists, create it if it doesn't
-                describeTopics = client.describeTopics(topicList);
-                return new BrokerDescribedTopicPair(brokerBuilder.build(), describeTopics);
-            }
-        } catch (Throwable ex) {
-            System.out.println("Exception Occurred while describing topics. " + ex.getMessage());
-            throw new RuntimeException("Exception Occurred while describing topics. " + ex.getMessage());
-        }
-
-    }
-
-    private void collectNumberOfMessagesCount(String cluster, String topic, TopicMetadata.TopicMetadataBuilder topicMetadataBuilder) {
-        try (KafkaConsumer<String, String> consumer = createConsumer(cluster)) {
-            List<TopicPartition> partitions = consumer.partitionsFor(topic).stream().map(p -> new TopicPartition(topic, p.partition()))
-                    .toList();
-            consumer.assign(partitions);
-            consumer.seekToEnd(Collections.emptySet());
-            Map<TopicPartition, Long> endPartitions = partitions.stream().collect(Collectors.toMap(Function.identity(), consumer::position));
-            topicMetadataBuilder.partitionCount(partitions.size());
-            topicMetadataBuilder.numberOfMessages(partitions.stream().mapToLong(endPartitions::get).sum());
-        }
-    }
-
-
-    private KafkaConsumer<String, String> createConsumer(String cluster) {
-        return createConsumer(cluster, "tgc");
-    }
-
-    private KafkaConsumer<String, String> createConsumer(String cluster, String groupId) {
-        Properties consumerProps = new Properties();
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster);
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        consumerProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, "20971520");
-        consumerProps.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, "20971520");
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        return new KafkaConsumer<String, String>(consumerProps);
-    }
-
-    public void getLastMessage(String cluster, String topic, TopicMetadata.TopicMetadataBuilder topicMetadataBuilder) {
-        try (KafkaConsumer<String, String> consumer = createConsumer(cluster, UUID.randomUUID().toString())) {
-            List<TopicPartition> partitions = consumer.partitionsFor(topic).stream().map(p -> new TopicPartition(topic, p.partition()))
-                    .toList();
-            consumer.assign(partitions);
-            consumer.seekToEnd(Collections.emptySet());
-
-            AtomicLong maxTimestamp = new AtomicLong();
-            AtomicReference<ConsumerRecord<String, String>> latestRecord = new AtomicReference<>();
-
-            // get the last offsets for each partition
-            consumer.endOffsets(consumer.assignment()).forEach((topicPartition, offset) -> {
-                // seek to the last offset of each partition
-                consumer.seek(topicPartition, (offset == 0) ? offset : offset - 1);
-
-                // poll to get the last record in each partition
-                consumer.poll(Duration.ofSeconds(3)).forEach(record -> {
-                    if (record.timestamp() > maxTimestamp.get()) {
-                        maxTimestamp.set(record.timestamp());
-                        latestRecord.set(record);
-                    }
-                });
-            });
-            if (Objects.nonNull(latestRecord.get())) {
-                topicMetadataBuilder.lastMessageTime(new Date(latestRecord.get().timestamp()));
-                topicMetadataBuilder.lastOffset(latestRecord.get().offset());
-                topicMetadataBuilder.lastOffsetPartition(latestRecord.get().partition());
-            }
-        } catch (Throwable ex) {
-            System.out.println("Exception occurred while getting last message " + ex.getMessage());
-        }
-    }
 }

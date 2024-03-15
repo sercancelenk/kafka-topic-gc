@@ -39,7 +39,7 @@ public class Initializer {
     public void initGC() {
         Arrays.stream(clusterBootstraps)
                 .forEach(cluster -> {
-                    adminService.collectDataFromKafka(applicationTaskExecutor, cluster);
+                    adminService.describeTopics(applicationTaskExecutor, cluster);
 //                    virtualTaskScheduler.schedule(() -> adminService.collectDataFromKafka(applicationTaskExecutor, cluster), new CronTrigger(applicationSchedulerCron));
                 });
     }
