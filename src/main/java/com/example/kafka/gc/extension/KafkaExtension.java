@@ -33,6 +33,7 @@ public interface KafkaExtension {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, getTopicGcProps().getDefaultConsumerProps().maxPartitionFetchBytes());
         consumerProps.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, getTopicGcProps().getDefaultConsumerProps().fetchMaxBytes());
+        consumerProps.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, false);
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         return new KafkaConsumer<String, String>(consumerProps);
     }

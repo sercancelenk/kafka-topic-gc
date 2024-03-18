@@ -10,11 +10,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.admin.*;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -30,12 +28,12 @@ import java.util.stream.Collectors;
 public class AdminClientService implements KafkaExtension {
     private final TopicGcProps topicGcProps;
 
-    protected Optional<BrokerDescribedTopicPair> getBrokerAndDescribedTopics(String bootstrapServers, List<String> ignoredTopicsKeys) {
+    protected Optional<BrokerDescribedTopicPair> getBrokerAndDescribedTopics(TopicGcProps.ClusterInfo clusterInfo, List<String> ignoredTopicsKeys) {
         Broker.BrokerBuilder brokerBuilder = Broker.builder();
         DescribeTopicsResult describeTopics = null;
 
         try {
-            try (AdminClient client = createAdminClient(bootstrapServers)) {
+            try (AdminClient client = createAdminClient(clusterInfo.bootstrapServers())) {
                 // Who are the brokers? Who is the controller?
                 DescribeClusterResult cluster = client.describeCluster();
 

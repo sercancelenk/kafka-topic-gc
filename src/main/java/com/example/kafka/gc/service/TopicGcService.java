@@ -1,5 +1,6 @@
 package com.example.kafka.gc.service;
 
+import com.example.kafka.gc.config.TopicGcProps;
 import com.example.kafka.gc.messaging.kafka.model.*;
 import com.example.kafka.gc.messaging.kafka.monitor.MonitoringProducer;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -30,7 +31,7 @@ public class TopicGcService {
     private final AdminClientService adminClientService;
 
     @SneakyThrows
-    public void describeTopics(AsyncTaskExecutor applicationTaskExecutor, String cluster) {
+    public void describeTopics(AsyncTaskExecutor applicationTaskExecutor, TopicGcProps.ClusterInfo cluster) {
         List<String> ignoredTopicsKeys = List.of("_schemas", "connect", "-");
         adminClientService.getBrokerAndDescribedTopics(cluster, ignoredTopicsKeys)
                 .ifPresentOrElse(brokerAndDescribedTopics -> {
@@ -44,15 +45,15 @@ public class TopicGcService {
                 }, () -> log.info("Can not describe broker and topics. Cluster: {}", cluster));
     }
 
-    private Runnable measureTopic(String cluster, String topic, KafkaFuture<TopicDescription> topicDescription, BrokerDescribedTopicPair brokerAndDescribedTopics, ThreadLocal<TopicMeasurement.TopicMeasurementBuilder> measurementBuilderTL, int topicIndex) {
+    private Runnable measureTopic(TopicGcProps.ClusterInfo cluster, String topic, KafkaFuture<TopicDescription> topicDescription, BrokerDescribedTopicPair brokerAndDescribedTopics, ThreadLocal<TopicMeasurement.TopicMeasurementBuilder> measurementBuilderTL, int topicIndex) {
         return () -> {
             try {
                 topicDescription
                         .thenApply(td -> {
                             measurementBuilderTL.set(TopicMeasurement.builder());
 
-                            PartitionMetadata partitionMetadata = adminClientService.measurePartitionMetadata(cluster, topic);
-                            LastMessageMetadata lastMessageMetadata = adminClientService.measureLastMessageMetadata(cluster, topic, partitionMetadata);
+                            PartitionMetadata partitionMetadata = adminClientService.measurePartitionMetadata(cluster.bootstrapServers(), topic);
+                            LastMessageMetadata lastMessageMetadata = adminClientService.measureLastMessageMetadata(cluster.bootstrapServers(), topic, partitionMetadata);
 
                             measurementBuilderTL.get().broker(brokerAndDescribedTopics.broker());
                             measurementBuilderTL.get().topicMetadata(TopicMetadata.builder()
@@ -65,7 +66,7 @@ public class TopicGcService {
                             measurementBuilderTL.get().metadataId(clusterId.concat("|").concat(topic));
                             TopicMeasurement measurement = measurementBuilderTL.get().build();
 
-                            topicMeasurementRedisService.set(topic, "Cluster-".concat(clusterId), measurement);
+                            topicMeasurementRedisService.set(topic, cluster.name(), measurement);
                             try {
                                 producer.sendMessage(objectMapper.writeValueAsString(measurement));
                             } catch (JsonProcessingException e) {

@@ -7,6 +7,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Component
 @ConfigurationProperties(prefix = "topic-gc")
 @Data
@@ -22,6 +24,8 @@ public class TopicGcProps {
 
     DefaultConsumerProps defaultConsumerProps;
 
+    public record ClusterInfo(String name, String bootstrapServers){}
+    List<ClusterInfo> clusters;
 
-
+    String schedulerCron;
 }
