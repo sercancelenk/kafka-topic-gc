@@ -21,4 +21,5 @@ public class TopicMetadata implements Serializable {
     Boolean internal;
     PartitionMetadata partitionMetadata;
     LastMessageMetadata lastMessageMetadata;
+    boolean hasConsumerGroup;
 }

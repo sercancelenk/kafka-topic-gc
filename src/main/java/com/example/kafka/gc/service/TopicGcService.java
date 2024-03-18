@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
@@ -15,6 +16,7 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -39,13 +41,24 @@ public class TopicGcService {
                     DescribeTopicsResult describeTopicsResult = brokerAndDescribedTopics.describeTopicsResult();
                     AtomicInteger topicIndex = new AtomicInteger(0);
                     log.info("Cluster: {}, Topic Count: {}", cluster, brokerAndDescribedTopics.describeTopicsResult().topicNameValues().size());
+                    Map<String, ConsumerGroupDescription> consumerGroupsMap = adminClientService.measureConsumerGroupsMetadata(cluster.bootstrapServers());
                     describeTopicsResult
                             .topicNameValues()
-                            .forEach((topic, value) -> applicationTaskExecutor.submit(measureTopic(cluster, topic, value, brokerAndDescribedTopics, topicMetadataBuilderTL, topicIndex.incrementAndGet())));
+                            .forEach((topic, topicDescription) -> applicationTaskExecutor.submit(measureTopic(cluster,
+                                    topic,
+                                    topicDescription,
+                                    brokerAndDescribedTopics,
+                                    topicMetadataBuilderTL,
+                                    consumerGroupsMap,
+                                    topicIndex.incrementAndGet())));
                 }, () -> log.info("Can not describe broker and topics. Cluster: {}", cluster));
     }
 
-    private Runnable measureTopic(TopicGcProps.ClusterInfo cluster, String topic, KafkaFuture<TopicDescription> topicDescription, BrokerDescribedTopicPair brokerAndDescribedTopics, ThreadLocal<TopicMeasurement.TopicMeasurementBuilder> measurementBuilderTL, int topicIndex) {
+    private Runnable measureTopic(TopicGcProps.ClusterInfo cluster, String topic,
+                                  KafkaFuture<TopicDescription> topicDescription,
+                                  BrokerDescribedTopicPair brokerAndDescribedTopics,
+                                  ThreadLocal<TopicMeasurement.TopicMeasurementBuilder> measurementBuilderTL,
+                                  Map<String, ConsumerGroupDescription> consumerGroupsMap, int topicIndex) {
         return () -> {
             try {
                 topicDescription
@@ -54,7 +67,7 @@ public class TopicGcService {
 
                             PartitionMetadata partitionMetadata = adminClientService.measurePartitionMetadata(cluster.bootstrapServers(), topic);
                             LastMessageMetadata lastMessageMetadata = adminClientService.measureLastMessageMetadata(cluster.bootstrapServers(), topic, partitionMetadata);
-                            adminClientService.measureConsumerGroupsMetadata(cluster.bootstrapServers());
+                            boolean hasConsumerGroup = adminClientService.iStopicBelongsToConsumerTopic(topic, consumerGroupsMap);
 
                             measurementBuilderTL.get().broker(brokerAndDescribedTopics.broker());
                             measurementBuilderTL.get().topicMetadata(TopicMetadata.builder()
@@ -62,6 +75,7 @@ public class TopicGcService {
                                     .internal(td.isInternal())
                                     .partitionMetadata(partitionMetadata)
                                     .lastMessageMetadata(lastMessageMetadata)
+                                    .hasConsumerGroup(hasConsumerGroup)
                                     .build());
                             String clusterId = brokerAndDescribedTopics.broker().getClusterId();
                             measurementBuilderTL.get().metadataId(clusterId.concat("|").concat(topic));

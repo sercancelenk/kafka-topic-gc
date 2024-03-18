@@ -9,7 +9,6 @@ import com.example.kafka.gc.messaging.kafka.model.PartitionMetadata;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.tuple.Triple;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -115,29 +114,31 @@ public class AdminClientService implements KafkaExtension {
         return null;
     }
 
-    protected void measureConsumerGroupsMetadata(String cluster) {
+    protected Map<String, ConsumerGroupDescription> measureConsumerGroupsMetadata(String cluster) {
         try (AdminClient adminClient = createAdminClient(cluster)) {
-
-
-            List<Triple<String, Optional<ConsumerGroupState>, Boolean>> groupInfos = adminClient.listConsumerGroups()
-                    .all()
-                    .get(60, TimeUnit.SECONDS)
-                    .stream()
-                    .map(a -> Triple.of(a.groupId(), a.state(), a.isSimpleConsumerGroup()))
+            ListConsumerGroupsOptions listConsumerGroupsOptions = new ListConsumerGroupsOptions();
+            listConsumerGroupsOptions.inStates(Set.of(ConsumerGroupState.STABLE));
+            List<String> groupIds = adminClient.listConsumerGroups(listConsumerGroupsOptions).all().get().stream()
+                    .map(ConsumerGroupListing::groupId)
                     .toList();
 
-            List<String> groupIds = groupInfos.stream().map(Triple::getLeft).toList();
-            adminClient.describeConsumerGroups(groupIds)
+            return adminClient.describeConsumerGroups(groupIds)
                     .all()
-                    .get(60, TimeUnit.SECONDS)
-                    .entrySet().forEach(cgi -> {
-                        boolean hasNoMembers = cgi.getValue().members().isEmpty();
-                        log.info("{} {} {}", cgi.getKey(), cgi.getValue().groupId(), cgi.getValue().state());
-                    });
+                    .get(60, TimeUnit.SECONDS);
 
         } catch (ExecutionException | InterruptedException | TimeoutException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    protected boolean iStopicBelongsToConsumerTopic(String topic, Map<String, ConsumerGroupDescription> consumerGroupsMap){
+        return consumerGroupsMap.keySet().stream().anyMatch(key ->
+                consumerGroupsMap.get(key).members().
+                        stream()
+                        .map(s -> s.assignment().topicPartitions()).
+                        flatMap(Collection::stream).
+                        anyMatch(s -> s.topic().equals(topic))
+        );
     }
 
     @Override
