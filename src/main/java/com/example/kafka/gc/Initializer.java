@@ -36,6 +36,9 @@ public class Initializer {
     public void initGC() {
         log.info("Kafka Topic GC initializing with props: {}", topicGcProps);
         topicGcProps.getClusters()
-                .forEach(cluster -> virtualTaskScheduler.schedule(() -> topicGcService.describeTopics(applicationTaskExecutor, cluster), new CronTrigger(topicGcProps.getSchedulerCron())));
+                .forEach(cluster -> {
+                    topicGcService.describeTopics(applicationTaskExecutor, cluster);
+//                    virtualTaskScheduler.schedule(() -> topicGcService.describeTopics(applicationTaskExecutor, cluster), new CronTrigger(topicGcProps.getSchedulerCron()));
+                });
     }
 }

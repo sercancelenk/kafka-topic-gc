@@ -1,22 +1,27 @@
 package com.example.kafka.gc.service;
 
+import com.example.kafka.gc.config.TopicGcProps;
 import com.example.kafka.gc.extension.KafkaExtension;
 import com.example.kafka.gc.messaging.kafka.model.Broker;
 import com.example.kafka.gc.messaging.kafka.model.BrokerDescribedTopicPair;
 import com.example.kafka.gc.messaging.kafka.model.LastMessageMetadata;
 import com.example.kafka.gc.messaging.kafka.model.PartitionMetadata;
-import com.example.kafka.gc.config.TopicGcProps;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.tuple.Triple;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -72,7 +77,7 @@ public class AdminClientService implements KafkaExtension {
     }
 
     protected LastMessageMetadata measureLastMessageMetadata(String cluster, String topic, PartitionMetadata partitionMetadata) {
-        if(partitionMetadata.getMessageCount()<=0){
+        if (partitionMetadata.getMessageCount() <= 0) {
             return LastMessageMetadata.builder().build();
         }
         try (KafkaConsumer<String, String> consumer = createConsumer(cluster, UUID.randomUUID().toString())) {
@@ -108,6 +113,31 @@ public class AdminClientService implements KafkaExtension {
             System.out.println("Exception occurred while getting last message " + ex.getMessage());
         }
         return null;
+    }
+
+    protected void measureConsumerGroupsMetadata(String cluster) {
+        try (AdminClient adminClient = createAdminClient(cluster)) {
+
+
+            List<Triple<String, Optional<ConsumerGroupState>, Boolean>> groupInfos = adminClient.listConsumerGroups()
+                    .all()
+                    .get(60, TimeUnit.SECONDS)
+                    .stream()
+                    .map(a -> Triple.of(a.groupId(), a.state(), a.isSimpleConsumerGroup()))
+                    .toList();
+
+            List<String> groupIds = groupInfos.stream().map(Triple::getLeft).toList();
+            adminClient.describeConsumerGroups(groupIds)
+                    .all()
+                    .get(60, TimeUnit.SECONDS)
+                    .entrySet().forEach(cgi -> {
+                        boolean hasNoMembers = cgi.getValue().members().isEmpty();
+                        log.info("{} {} {}", cgi.getKey(), cgi.getValue().groupId(), cgi.getValue().state());
+                    });
+
+        } catch (ExecutionException | InterruptedException | TimeoutException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override

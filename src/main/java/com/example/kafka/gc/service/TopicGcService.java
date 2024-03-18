@@ -54,6 +54,7 @@ public class TopicGcService {
 
                             PartitionMetadata partitionMetadata = adminClientService.measurePartitionMetadata(cluster.bootstrapServers(), topic);
                             LastMessageMetadata lastMessageMetadata = adminClientService.measureLastMessageMetadata(cluster.bootstrapServers(), topic, partitionMetadata);
+                            adminClientService.measureConsumerGroupsMetadata(cluster.bootstrapServers());
 
                             measurementBuilderTL.get().broker(brokerAndDescribedTopics.broker());
                             measurementBuilderTL.get().topicMetadata(TopicMetadata.builder()

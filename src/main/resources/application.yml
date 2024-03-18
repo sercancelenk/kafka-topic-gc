@@ -19,7 +19,7 @@ topic-gc:
     request-timeout: 20000
   clusters:
     - name: confluent
-      bootstrap-servers: staging-confluent-broker-01-earth.trendyol.com:9092,staging-confluent-broker-02-earth.trendyol.com:9092,staging-confluent-broker-03-earth.trendyol.com:9092,staging-confluent-broker-04-earth.trendyol.com:9092,staging-confluent-broker-05-earth.trendyol.com:9092,staging-confluent-broker-06-earth.trendyol.com:9092,staging-confluent-broker-07-earth.trendyol.com:9092,staging-confluent-broker-08-earth.trendyol.com:9092
+      bootstrap-servers: localhost:9092
     - name: local
       bootstrap-servers: localhost:9092
   scheduler-cron: "* * */3 * * *"
